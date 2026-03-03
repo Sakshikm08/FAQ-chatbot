@@ -39,28 +39,27 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── API KEY INPUT ────────────────────────────────────────────────────────────
-api_key = "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"  # paste your key here
-model = "llama-3.3-70b-versatile"   # latest free model
+API_KEY = "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"
+MODEL   = "llama-3.3-70b-versatile"
 
+# Session state init
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "history" not in st.session_state:
     st.session_state.history = []
+if "input_key" not in st.session_state:
+    st.session_state.input_key = 0
+if "pending" not in st.session_state:
+    st.session_state.pending = None
 
-def ask_groq(user_message, history, api_key, model):
+def ask_groq(user_message, history):
     history.append({"role": "user", "content": user_message})
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
+        headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
         json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "You are a helpful, friendly, and knowledgeable AI assistant. Answer questions clearly and concisely from any field including science, math, history, coding, health, law, finance, geography, and more. Keep responses friendly and easy to understand."}
-            ] + history,
+            "model": MODEL,
+            "messages": [{"role": "system", "content": "You are a helpful, friendly, and knowledgeable AI assistant. Answer questions clearly and concisely from any field including science, math, history, coding, health, law, finance, geography, and more."}] + history,
             "max_tokens": 1024,
             "temperature": 0.7
         }
@@ -74,10 +73,23 @@ def ask_groq(user_message, history, api_key, model):
         return f"Error: {data['error']['message']}", history
     return None, history
 
-# ─── CHAT DISPLAY ─────────────────────────────────────────────────────────────
+# Process pending message BEFORE rendering input
+if st.session_state.pending:
+    user_msg = st.session_state.pending
+    st.session_state.pending = None
+    st.session_state.messages.append({"role": "user", "text": user_msg})
+    with st.spinner("Thinking..."):
+        reply, updated_history = ask_groq(user_msg, st.session_state.history)
+    if reply:
+        st.session_state.history = updated_history
+        st.session_state.messages.append({"role": "bot", "text": reply})
+    else:
+        st.session_state.messages.append({"role": "error", "text": "Something went wrong. Please try again."})
+
+# Chat display
 chat_html = '<div class="chat-container">'
 if not st.session_state.messages:
-    chat_html += '<div class="bot-msg">👋 Hi! I\'m your AI assistant powered by <b>Groq</b>. Ask me <b>anything</b> — science, math, coding, history, health, and more!</div>'
+    chat_html += '<div class="bot-msg">👋 Hi! I\'m your AI assistant. Ask me <b>anything</b> — science, math, coding, history, health, and more!</div>'
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         chat_html += f'<div class="user-msg">🧑 {msg["text"]}</div>'
@@ -89,25 +101,25 @@ for msg in st.session_state.messages:
 chat_html += '</div>'
 st.markdown(chat_html, unsafe_allow_html=True)
 
-# ─── INPUT ────────────────────────────────────────────────────────────────────
+# Input — key changes on each submit to clear the box
 col1, col2 = st.columns([5, 1])
 with col1:
-    user_input = st.text_input("Ask anything", placeholder="e.g. What is quantum computing?", label_visibility="collapsed")
+    user_input = st.text_input(
+        "Ask anything",
+        placeholder="Type your question and press Enter or click Send…",
+        label_visibility="collapsed",
+        key=f"chat_input_{st.session_state.input_key}"
+    )
 with col2:
     send = st.button("Send ➤")
 
-if send and user_input.strip():
-    st.session_state.messages.append({"role": "user", "text": user_input})
-    with st.spinner("Thinking..."):
-        reply, updated_history = ask_groq(user_input, st.session_state.history, api_key, model)
-    if reply:
-        st.session_state.history = updated_history
-        st.session_state.messages.append({"role": "bot", "text": reply})
-    else:
-        st.session_state.messages.append({"role": "error", "text": "Something went wrong. Please try again."})
+if (send or user_input) and user_input.strip():
+    st.session_state.pending = user_input.strip()
+    st.session_state.input_key += 1  # clears the input box
     st.rerun()
 
 if st.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.session_state.history = []
+    st.session_state.pending = None
     st.rerun()
