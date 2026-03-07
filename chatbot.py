@@ -1,5 +1,10 @@
 import streamlit as st
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+API_KEY = os.getenv("GROQ_API_KEY")
 
 st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="centered")
 
@@ -39,10 +44,21 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-API_KEY = "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"
-MODEL   = "llama-3.3-70b-versatile"
+# ─── API KEY CHECK ────────────────────────────────────────────────────────────
+if not API_KEY:
+    st.markdown("""
+    <div class="error-msg" style="margin: 20px 0;">
+        ⚠️ <b>API key not found.</b><br><br>
+        Create a <code>.env</code> file in this folder and add:<br>
+        <code>GROQ_API_KEY=your_api_key_here</code><br><br>
+        Get a free key at: <b>https://console.groq.com</b>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
-# Session state init
+MODEL = "llama-3.3-70b-versatile"
+
+# ─── SESSION STATE ────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "history" not in st.session_state:
@@ -73,7 +89,7 @@ def ask_groq(user_message, history):
         return f"Error: {data['error']['message']}", history
     return None, history
 
-# Process pending message BEFORE rendering input
+# ─── PROCESS PENDING ─────────────────────────────────────────────────────────
 if st.session_state.pending:
     user_msg = st.session_state.pending
     st.session_state.pending = None
@@ -86,7 +102,7 @@ if st.session_state.pending:
     else:
         st.session_state.messages.append({"role": "error", "text": "Something went wrong. Please try again."})
 
-# Chat display
+# ─── CHAT DISPLAY ─────────────────────────────────────────────────────────────
 chat_html = '<div class="chat-container">'
 if not st.session_state.messages:
     chat_html += '<div class="bot-msg">👋 Hi! I\'m your AI assistant. Ask me <b>anything</b> — science, math, coding, history, health, and more!</div>'
@@ -101,7 +117,7 @@ for msg in st.session_state.messages:
 chat_html += '</div>'
 st.markdown(chat_html, unsafe_allow_html=True)
 
-# Input — key changes on each submit to clear the box
+# ─── INPUT ────────────────────────────────────────────────────────────────────
 col1, col2 = st.columns([5, 1])
 with col1:
     user_input = st.text_input(
@@ -115,7 +131,7 @@ with col2:
 
 if (send or user_input) and user_input.strip():
     st.session_state.pending = user_input.strip()
-    st.session_state.input_key += 1  # clears the input box
+    st.session_state.input_key += 1
     st.rerun()
 
 if st.button("🗑️ Clear Chat"):
